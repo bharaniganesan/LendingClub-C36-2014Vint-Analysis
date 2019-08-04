@@ -18,9 +18,13 @@ input_file_name = 'PMTHIST_ALL_201907.csv'
 output_file_name = 'PMTHIST_FILTERED2.csv'
 
 # Filter out data using criteria
-# performance of grade-C, 3-year loans 
+# Performance of grade-C, 3-year loans, issued in 2014
 #print('Filtering out the data')
 #filter_lc_data(input_file_name, output_file_name)
+
+'''
+Data Cleaning and Filtering
+'''
 
 # Load the filtered data as dataframe  
 print('Loading as a data frame')
@@ -37,7 +41,6 @@ lc_dataframe['Mid_App_FICO'] = (lc_dataframe['APPL_FICO_BAND'].str.split('-')).a
 
 #The data towards the end becomes very thin due to most loans paying off.
 #So keep performance data only till end of 2017.
-
 lc_dataframe_short = lc_dataframe.loc[lc_dataframe.MONTH <= '2017-12-31']
 
 #Sort the dataframe by loan ID by date
@@ -45,6 +48,12 @@ lc_dataframe_short = lc_dataframe_short.sort_values(by=['LOAN_ID', 'MONTH'])
 
 #Get the first occurance of each loan to plot portfolio stats
 first_loan_row = lc_dataframe_short.groupby('LOAN_ID').first().reset_index()
+
+#Count the number of loans by status
+first_loan_row.groupby('PERIOD_END_LSTAT').count()
+
+#Remove the loans which appear with a status other than current first up as these could be due to some data issues
+first_loan_row = first_loan_row.loc[first_loan_row['PERIOD_END_LSTAT'] == 'Current']
 
 #Export the dataset to csv
 first_loan_row.to_csv('FIRST_LOAN_OCCURANCE.CSV')
@@ -58,6 +67,12 @@ lc_def_paidoff_first = (lc_dataframe.loc[(lc_dataframe['PERIOD_END_LSTAT']=='Ful
 #Export the dataset to csv
 lc_def_paidoff_first.to_csv('FIRST_DEFAULT_PAYOFF.CSV')
 '''
+loan_list = list(first_loan_row.LOAN_ID.unique())
+
+#Now keep only the loans in the first_loan_row dataframe to track performance
+lc_dataframe_short = lc_dataframe_short[lc_dataframe_short.LOAN_ID.isin(loan_list)]
+lc_dataframe_short.LOAN_ID.nunique() #43461 rows, same as the loan list to keep
+
 
 '''
 ########### Calculate the Net Monthly and Annualized Returns for each month ###########
@@ -85,6 +100,31 @@ monthly_nar_pivot = pd.pivot_table(data_grpby_month, values = 'NAR', index = 'MO
 
 #Export the data to csv for plotting in Tableau
 monthly_nar_pivot.to_csv("Monthly_NAR.csv")
+
+'''
+########### Calculate the Net Cumulative Annualized Returns for each month ###########
+'''
+data_grpby_month_cumsum = data_grpby_month.groupby('MONTH').cumsum().reset_index()
+data_grpby_month_cumsum['Net Monthly Return'] = (data_grpby_month_cumsum['INT_PAID'] + data_grpby_month_cumsum['FEE_PAID']\
+                            - (data_grpby_month_cumsum['INT_PAID'] + data_grpby_month_cumsum['FEE_PAID']) * (0.01)\
+                            - data_grpby_month_cumsum['COAMT'] - data_grpby_month_cumsum['PCO_COLLECTION_FEE']\
+                            + data_grpby_month_cumsum['PCO_RECOVERY'])/data_grpby_month_cumsum['PBAL_BEG_PERIOD']
+
+data_grpby_month_cumsum['NAR'] = (1 + data_grpby_month_cumsum['Net Monthly Return']) ** 12 - 1
+
+#Some descriptive stats and charts about the returns
+data_grpby_month_cumsum.NAR.describe()
+
+plt.plot(data_grpby_month_cumsum.MONTH, data_grpby_month_cumsum['NAR'])
+plt.title("NAR During Performance Window")
+
+#Pivot the table to get monthly NAR
+monthly_cum_nar_pivot = pd.pivot_table(data_grpby_month_cumsum, values = 'NAR', index = 'MONTH',\
+                                      fill_value = 0)
+
+#Export the data to csv for plotting in Tableau
+monthly_cum_nar_pivot.to_csv("Monthly_Cum_NAR.csv")
+
 
 '''
 ########### Group the NAR data by Month and State ###########
@@ -122,7 +162,7 @@ data_grpby_month_lstat.to_csv('Bal by Month and Loan State.csv')
 #Add the total NAR by month to the NAR by state and month
 #Since this is not a static portfolio, the weights each month keep changing
 #So, risk contribution calculations may not completely pan out. Yet, this is a concept worth exploring
-#Try and calculate risk contribution
+#TCalculate risk contribution
 nar_state_total_month = pd.merge(nar_month_state_pivot, monthly_nar_pivot, on = 'MONTH')
 state_pf_corr = nar_state_total_month.corr()['NAR'][:-1] #Retained Risk, w/o last row for full portfolio
 state_stdev = nar_state_total_month.std(axis = 0)[:-1] #Remove the last row for full portfolio
@@ -150,23 +190,29 @@ state_risk_cont_measures.to_csv('State_risk_cont_measures.csv')
 '''
 from scipy.optimize import minimize
 
+#Define the objective function
 def portReturn(weights):
     return -weights.dot(nar_month_state_pivot.mean())
-                       
+
+#Set the lower and upper bounds for weights. We cap it at 10%
+#as optimizing via incremental steps is more feasible than jumping to
+#"The Optimal" portfolio                        
 lowerBound = state_loan_weight * 0.9
 upperBound = state_loan_weight * 1.1
 
+#Call the optimizer
 result_weight = minimize(portReturn, state_loan_weight, bounds = list(zip(lowerBound, upperBound)))
 
-print(result_weight.x)
-
+#Extract the optimal weights
 optimal_weights = pd.Series(result_weight.x, index = list(state_loan_weight.index))
 optimal_weights.reindex(list(state_loan_weight.index))
 
+#Calculate current risk, return and Sharpe ratios
 currentReturn = state_loan_weight.dot(nar_month_state_pivot.mean())
 currentVol = riskCont_state.dot(state_loan_weight)
 current_sharpe_ratio = currentReturn/currentVol
 
+#Calculate the optimized risk, return and Sharpe ratios
 newReturn = optimal_weights.dot(nar_month_state_pivot.mean())
 newVol = riskCont_state.dot(optimal_weights)
 new_sharpe_ratio =  newReturn/newVol
@@ -178,3 +224,16 @@ pre_post_opt_weights = pd.concat([state_loan_weight, optimal_weights,\
 #Export to csv for plotting in Tableau
 pre_post_opt_weights.to_csv('pre_post_opt_weights.csv')
 
+'''
+Defaulted loans
+'''
+#Get the list of defaulted loans
+default_loans = pd.DataFrame(lc_dataframe_short.loc[lc_dataframe_short['PERIOD_END_LSTAT']=='Default','LOAN_ID'].unique())
+default_loans['Default'] = 1 #Add a flag for defaults
+default_loans.rename(columns={ default_loans.columns[0]: "LOAN_ID" }, inplace = True)
+
+#Add the default column to the list of loans issued. Replace nan with zero -> didn't default
+first_loan_row_w_def = pd.merge(first_loan_row, default_loans, how = 'left', on = 'LOAN_ID').fillna(0)
+
+#Export to csv
+first_loan_row_w_def.to_csv('Loans_issued_w_default_flag.csv')

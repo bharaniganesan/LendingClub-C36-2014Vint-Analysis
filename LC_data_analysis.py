@@ -120,16 +120,61 @@ data_grpby_month_lstat.to_csv('Bal by Month and Loan State.csv')
 ########### Risk Contribution ###########
 '''
 #Add the total NAR by month to the NAR by state and month
+#Since this is not a static portfolio, the weights each month keep changing
+#So, risk contribution calculations may not completely pan out. Yet, this is a concept worth exploring
 #Try and calculate risk contribution
 nar_state_total_month = pd.merge(nar_month_state_pivot, monthly_nar_pivot, on = 'MONTH')
-state_pf_corr = nar_state_total_month.corr()['NAR'][:-1] #Retained Risk
-state_std = nar_state_total_month.std(axis = 0)[:-1] #Remove the last row for full portfolio
+state_pf_corr = nar_state_total_month.corr()['NAR'][:-1] #Retained Risk, w/o last row for full portfolio
+state_stdev = nar_state_total_month.std(axis = 0)[:-1] #Remove the last row for full portfolio
 state_loan_amt = first_loan_row.groupby('State').agg({'PBAL_BEG_PERIOD':'sum'})
 state_loan_weight = np.true_divide(state_loan_amt.PBAL_BEG_PERIOD,state_loan_amt['PBAL_BEG_PERIOD'].sum())
 
-riskCont_state = np.multiply(state_pf_corr, state_std)
+riskCont_state = np.multiply(state_pf_corr, state_stdev)
 pfVol = riskCont_state.dot(state_loan_weight)
 
 monthly_nar_pivot.describe()
 
+#Combine risk contribution related measures and export to csv for Tableau plots
+state_risk_cont_measures = pd.concat([state_pf_corr, state_stdev,  riskCont_state], axis = 1)
+
+#Rename the columns
+state_risk_cont_measures.rename(columns = {state_risk_cont_measures.columns[0] : 'Ret_risk',\
+                                           state_risk_cont_measures.columns[1] : 'Std_Dev',\
+                                           state_risk_cont_measures.columns[2] : 'Risk_cont'})
+
+#Export to csv
+state_risk_cont_measures.to_csv('State_risk_cont_measures.csv')
+
+'''
+########### Optimization ###########
+'''
+from scipy.optimize import minimize
+
+def portReturn(weights):
+    return -weights.dot(nar_month_state_pivot.mean())
+                       
+lowerBound = state_loan_weight * 0.9
+upperBound = state_loan_weight * 1.1
+
+result_weight = minimize(portReturn, state_loan_weight, bounds = list(zip(lowerBound, upperBound)))
+
+print(result_weight.x)
+
+optimal_weights = pd.Series(result_weight.x, index = list(state_loan_weight.index))
+optimal_weights.reindex(list(state_loan_weight.index))
+
+currentReturn = state_loan_weight.dot(nar_month_state_pivot.mean())
+currentVol = riskCont_state.dot(state_loan_weight)
+current_sharpe_ratio = currentReturn/currentVol
+
+newReturn = optimal_weights.dot(nar_month_state_pivot.mean())
+newVol = riskCont_state.dot(optimal_weights)
+new_sharpe_ratio =  newReturn/newVol
+
+#Combine the weights and export to csv for Tableau plotting
+pre_post_opt_weights = pd.concat([state_loan_weight, optimal_weights,\
+                                  pd.Series(nar_month_state_pivot.mean()), riskCont_state ], axis = 1)
+
+#Export to csv for plotting in Tableau
+pre_post_opt_weights.to_csv('pre_post_opt_weights.csv')
 

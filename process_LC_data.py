@@ -20,8 +20,6 @@ def get_lc_data(csv_fname):
 def filter_lc_data(input_file_name, output_file_name):
     print('Filtering out data')
     
-    year_list = ['2014','2015']
-
     with open(output_file_name,'w') as file:
         wr = csv.writer(file)
         row_count = 0
@@ -36,7 +34,7 @@ def filter_lc_data(input_file_name, output_file_name):
                 match_count += 1
             
             row_count += 1
-            #print(f'match count = {match_count}')
+            
             #if match_count == 50:
                 #break
             
@@ -44,15 +42,3 @@ def filter_lc_data(input_file_name, output_file_name):
 def load_as_dataframe(file_name):
     return pd.read_csv(file_name, parse_dates = ['MONTH','IssuedDate'],\
                                                        infer_datetime_format = True)
-
-# Call the function when the script is executed
-if __name__ == "__main__":
-    print("In process_LC_data.py")
-    input_file_name = 'PMTHIST_ALL_201907.csv'
-    output_file_name = 'PMTHIST_FILTERED2.csv'
-    filter_lc_data(input_file_name, output_file_name)
-    lc_dataframe = load_as_dataframe(output_file_name)
-    
-    #The step below gave an error as some entries are coded "MISSING" 
-    #lc_dataframe['Mid_Last_FICO'] = (lc_dataframe['Last_FICO_BAND'].str.split('-')).apply(lambda x: (float(x[0]) + float(x[1]))/2)
-    not36 = lc_dataframe.loc[(lc_dataframe['term'] != 36)]

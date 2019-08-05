@@ -15,12 +15,11 @@ import pandas as pd
 
 # Set up the files
 input_file_name = 'PMTHIST_ALL_201907.csv'
-output_file_name = 'PMTHIST_FILTERED2.csv'
+output_file_name = 'PMTHIST_FILTERED.csv'
 
 # Filter out data using criteria
 # Performance of grade-C, 3-year loans, issued in 2014
-#print('Filtering out the data')
-#filter_lc_data(input_file_name, output_file_name)
+filter_lc_data(input_file_name, output_file_name)
 
 '''
 Data Cleaning and Filtering

@@ -6,9 +6,9 @@ This analysis examines the performance of Lending Club's 'C' grade loans with a 
 
 ## Design Choices
 ### Python
-1. Generators
-2. Pandas DataFrames
-3. scipy.optimize
+1. Generators - Memory efficient way to read the large input data
+2. Pandas DataFrames - Efficient way to slice and dice the large data set
+3. scipy.optimize - To determine a more optimal portfolio mix
 
 ### Tableau
 1. Worksheets

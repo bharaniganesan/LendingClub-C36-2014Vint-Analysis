@@ -19,11 +19,11 @@ This analysis examines the performance of Lending Club's 'C' grade loans with a 
 ### Parsing the file from Lending Club (process_LC_data.py)
 The script in 'process_LC_data.py' parses the data from the .csv file found here: https://lendingclub.com/company/additional-statistics > All payments (includes payments made to investors and to LendingClub).
 
-In order to handle the large volume of data in the above file, this script implements a Python generator that yields one record at a time. The record is then examined to determine if the loan is a 'C' grade, 36 month loan issued in 2014. This subset of data is stored in an intermediate .csv file "PMTHIST_FILTERED2.csv".
+In order to handle the large volume of data in the above file, this script implements a Python generator that yields one record at a time. The record is then examined to determine if the loan is a 'C' grade, 36 month loan issued in 2014. This subset of data is stored in an intermediate .csv file "PMTHIST_FILTERED.csv".
 
 
 ### Data Analysis Using Python (LC_data_analysis.py)
-This script loads the data from "PMTHIST_FILTERED2.csv" to a Pandas DataFrame. This script restricts the performance window till December 2017, and also keeps loans which have a status of "Current" in their first occurance in the file.
+This script loads the data from "PMTHIST_FILTERED.csv" to a Pandas DataFrame. This script restricts the performance window till December 2017, and also keeps loans which have a status of "Current" in their first occurance in the file.
 
 This script executes the following analyses:
 1. Calculate the Net Monthly and Annualized Returns for each month

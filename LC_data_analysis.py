@@ -192,7 +192,7 @@ from scipy.optimize import minimize
 
 #Define the objective function
 def portReturn(weights):
-    return -weights.dot(nar_month_state_pivot.mean())
+    return -weights.dot(nar_month_state_pivot.mean())/weights.dot(riskCont_state)
 
 #Set the lower and upper bounds for weights. We cap it at 10%
 #as optimizing via incremental steps is more feasible than jumping to
